@@ -1,49 +1,71 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { listPods, listDeployments } from '@/services/kubernetes';
+import { listPods, listDeployments, listServices, listConfigMaps, listSecrets } from '@/services/kubernetes';
+
+// Helper function (can be moved to a shared utils file if used in multiple API routes)
+const getQueryParam = (param: string | string[] | undefined, paramName: string): string | null => {
+  if (typeof param === 'string' && param) {
+    return param;
+  }
+  return null;
+};
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { context, namespace, resourceType } = req.query;
-
-  if (!context || typeof context !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid context parameter' });
-  }
-
-  if (!namespace || typeof namespace !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid namespace parameter' });
-  }
-
   if (req.method === 'GET') {
-    try {
-      let resources;
-      
-      switch (resourceType) {
-        case 'pods':
-          resources = await listPods(context, namespace);
-          break;
-        case 'deployments':
-          resources = await listDeployments(context, namespace);
-          break;
-        case 'all':
-        default:
-          const [pods, deployments] = await Promise.all([
-            listPods(context, namespace),
-            listDeployments(context, namespace),
-          ]);
-          resources = {
-            pods,
-            deployments,
-          };
-      }
-      
-      return res.status(200).json(resources);
-    } catch (error) {
-      console.error(`Error fetching resources for context ${context} in namespace ${namespace}:`, error);
-      return res.status(500).json({ error: 'Failed to fetch resources' });
+    const { context: rawContext, namespace: rawNamespace, type: rawType } = req.query;
+
+    const context = getQueryParam(rawContext, 'context');
+    const namespace = getQueryParam(rawNamespace, 'namespace');
+    const type = getQueryParam(rawType, 'type'); // Optional, so null is fine if not provided
+
+    if (!context || !namespace) {
+      let missing = [];
+      if (!context) missing.push('context');
+      if (!namespace) missing.push('namespace');
+      return res.status(400).json({ error: `Missing or invalid query parameters: ${missing.join(', ')}. Context and namespace must be non-empty strings.` });
     }
+
+    try {
+      let resources: any[] = [];
+      if (type) {
+        // If a specific type is requested, fetch only that type
+        // (Assuming service functions like listPods, listDeployments handle singular type names)
+        const singularType = type.endsWith('s') ? type.slice(0, -1) : type;
+        switch (singularType.toLowerCase()) {
+          case 'pod':
+            resources = await listPods(context, namespace);
+            break;
+          case 'deployment':
+            resources = await listDeployments(context, namespace);
+            break;
+          case 'service':
+            resources = await listServices(context, namespace);
+            break;
+          case 'configmap':
+            resources = await listConfigMaps(context, namespace);
+            break;
+          case 'secret':
+            resources = await listSecrets(context, namespace);
+            break;
+          default:
+            return res.status(400).json({ error: `Unsupported or unknown resource type: ${type}` });
+        }
+      } else {
+        // If no type is specified, fetch a default set of resources (e.g., pods and deployments)
+        const pods = await listPods(context, namespace);
+        const deployments = await listDeployments(context, namespace);
+        const services = await listServices(context, namespace); // Also fetch services by default
+        resources = [...pods, ...deployments, ...services];
+      }
+      return res.status(200).json(resources);
+    } catch (error: any) {
+      console.error(`Error listing resources in ${namespace} for context ${context} (type: ${type || 'all'}):`, error);
+      return res.status(500).json({ error: error.message || 'Failed to list resources' });
+    }
+  } else {
+    res.setHeader('Allow', ['GET']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
-  
-  return res.status(405).json({ error: 'Method not allowed' });
 } 

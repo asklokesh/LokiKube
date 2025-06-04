@@ -1,70 +1,59 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getK8sClient, deleteResource } from '@/services/kubernetes';
+import { getResourceYaml, deleteResource } from '@/services/kubernetes';
+
+// Helper to validate and extract single string query parameters
+const getQueryParam = (param: string | string[] | undefined, paramName: string): string | null => {
+  if (typeof param === 'string' && param) {
+    return param;
+  }
+  // console.warn(`Query parameter '${paramName}' is missing or not a string.`);
+  return null;
+};
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { context, namespace, type, name } = req.query;
+  const { context: rawContext, namespace: rawNamespace, type: rawType, name: rawName } = req.query;
 
-  if (!context || typeof context !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid context parameter' });
+  const context = getQueryParam(rawContext, 'context');
+  const namespace = getQueryParam(rawNamespace, 'namespace');
+  const type = getQueryParam(rawType, 'type');
+  const name = getQueryParam(rawName, 'name');
+
+  if (!context || !namespace || !type || !name) {
+    let missing = [];
+    if (!context) missing.push('context');
+    if (!namespace) missing.push('namespace');
+    if (!type) missing.push('type');
+    if (!name) missing.push('name');
+    return res.status(400).json({ error: `Missing or invalid query parameters: ${missing.join(', ')}. All must be non-empty strings.` });
   }
-
-  if (!namespace || typeof namespace !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid namespace parameter' });
-  }
-
-  if (!type || typeof type !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid type parameter' });
-  }
-
-  if (!name || typeof name !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid name parameter' });
-  }
-
-  // Convert type to singular form (e.g., "pods" -> "pod")
-  const kind = type.endsWith('s') ? type.slice(0, -1) : type;
 
   if (req.method === 'GET') {
     try {
-      const client = getK8sClient(context);
-      let resource;
-      
-      switch (kind) {
-        case 'pod':
-          resource = await client.core.readNamespacedPod(name, namespace);
-          break;
-        case 'deployment':
-          resource = await client.apps.readNamespacedDeployment(name, namespace);
-          break;
-        case 'service':
-          resource = await client.core.readNamespacedService(name, namespace);
-          break;
-        case 'configmap':
-          resource = await client.core.readNamespacedConfigMap(name, namespace);
-          break;
-        case 'secret':
-          resource = await client.core.readNamespacedSecret(name, namespace);
-          break;
-        default:
-          return res.status(400).json({ error: `Unsupported resource type: ${type}` });
-      }
-      
-      return res.status(200).json(resource.body);
-    } catch (error) {
-      console.error(`Error fetching ${type} ${name} in namespace ${namespace}:`, error);
-      return res.status(500).json({ error: `Failed to fetch ${type}` });
+      // NOTE: getResourceYaml is used here. If a non-YAML version (e.g., just JSON object) is needed,
+      // a new service function like `getSpecificResource` would be required.
+      // For now, assuming this API endpoint is intended to serve the YAML representation for GET.
+      const resource = await getResourceYaml(context, type, name, namespace);
+      // getResourceYaml returns a string (YAML). If the client expects JSON, this needs adjustment.
+      // To return as YAML text:
+      res.setHeader('Content-Type', 'application/yaml');
+      return res.status(200).send(resource);
+    } catch (error: any) {
+      console.error(`Error getting resource ${type}/${name} in ${namespace} for context ${context}:`, error);
+      return res.status(500).json({ error: error.message || 'Failed to get resource' });
     }
   } else if (req.method === 'DELETE') {
     try {
-      await deleteResource(context, kind, name, namespace);
-      return res.status(200).json({ success: true, message: `${kind} "${name}" deleted successfully` });
-    } catch (error) {
-      console.error(`Error deleting ${type} ${name} in namespace ${namespace}:`, error);
-      return res.status(500).json({ error: `Failed to delete ${type}` });
+      await deleteResource(context, type, name, namespace);
+      return res.status(204).end(); // Successfully deleted, no content to return
+    } catch (error: any) {
+      console.error(`Error deleting resource ${type}/${name} in ${namespace} for context ${context}:`, error);
+      return res.status(500).json({ error: error.message || 'Failed to delete resource' });
     }
+  } else {
+    res.setHeader('Allow', ['GET', 'DELETE']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
-  
-  return res.status(405).json({ error: 'Method not allowed' });
 } 

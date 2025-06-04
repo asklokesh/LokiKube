@@ -2,8 +2,32 @@ import React, { useEffect, useState } from 'react';
 import { useClusterStore } from '@/store/clusterStore';
 import { CloudCredential, KubeConfig } from '@/services/kubernetes';
 import { FaAws, FaGoogle, FaMicrosoft, FaServer, FaSpinner } from 'react-icons/fa';
+import { useRouter } from 'next/router';
+
+const AWS_REGIONS = [
+  { label: 'US East (N. Virginia) us-east-1', value: 'us-east-1' },
+  { label: 'US West (Oregon) us-west-2', value: 'us-west-2' },
+  { label: 'US East (Ohio) us-east-2', value: 'us-east-2' },
+  { label: 'US West (N. California) us-west-1', value: 'us-west-1' },
+  { label: 'Europe (Ireland) eu-west-1', value: 'eu-west-1' },
+  { label: 'Europe (Frankfurt) eu-central-1', value: 'eu-central-1' },
+  { label: 'Asia Pacific (Tokyo) ap-northeast-1', value: 'ap-northeast-1' },
+  { label: 'Asia Pacific (Singapore) ap-southeast-1', value: 'ap-southeast-1' },
+];
+
+const AZURE_LOCATIONS = [
+  { label: 'East US', value: 'eastus' },
+  { label: 'West US', value: 'westus' },
+  { label: 'West Europe', value: 'westeurope' },
+  { label: 'North Europe', value: 'northeurope' },
+  { label: 'Central US', value: 'centralus' },
+  { label: 'East Asia', value: 'eastasia' },
+  { label: 'Southeast Asia', value: 'southeastasia' },
+  { label: 'Japan East', value: 'japaneast' },
+];
 
 const ClusterConnection: React.FC = () => {
+  const router = useRouter();
   const { 
     availableClusters, 
     cloudCredentials, 
@@ -26,11 +50,14 @@ const ClusterConnection: React.FC = () => {
   
   const [selectedCredential, setSelectedCredential] = useState<CloudCredential | null>(null);
   const [typedClusterName, setTypedClusterName] = useState('');
-  const [selectedCloudCluster, setSelectedCloudCluster] = useState<string>('');
+  const [selectedCloudClusterName, setSelectedCloudClusterName] = useState<string>('');
   
-  const [availableCloudClusters, setAvailableCloudClusters] = useState<string[]>([]);
+  const [availableCloudClusters, setAvailableCloudClusters] = useState<Array<string | { name: string; resourceGroup: string; location: string }>>([]);
   const [isLoadingCloudClusters, setIsLoadingCloudClusters] = useState<boolean>(false);
   const [cloudClustersError, setCloudClustersError] = useState<string | null>(null);
+
+  const [selectedAwsRegions, setSelectedAwsRegions] = useState<string[]>(['us-east-1', 'us-west-2']);
+  const [selectedAzureLocations, setSelectedAzureLocations] = useState<string[]>(['eastus', 'westus']);
 
   const [selectedExistingCluster, setSelectedExistingCluster] = useState<KubeConfig | null>(null);
   const [connectionTab, setConnectionTab] = useState<'existing' | 'new'>('existing');
@@ -86,23 +113,41 @@ const ClusterConnection: React.FC = () => {
         setIsLoadingCloudClusters(true);
         setCloudClustersError(null);
         setAvailableCloudClusters([]);
-        setSelectedCloudCluster('');
+        setSelectedCloudClusterName('');
+        
+        const apiRequestBody: { 
+          credential: CloudCredential, 
+          regions?: string[],
+          locations?: string[]
+        } = { credential: selectedCredential };
+
+        if (selectedCredential.provider === 'aws' && selectedAwsRegions.length > 0) {
+          apiRequestBody.regions = selectedAwsRegions;
+        } else if (selectedCredential.provider === 'azure' && selectedAzureLocations.length > 0) {
+          apiRequestBody.locations = selectedAzureLocations;
+        }
+
         try {
           const response = await fetch('/api/cloud-clusters', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ credential: selectedCredential }),
+            body: JSON.stringify(apiRequestBody),
           });
           if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to fetch clusters for this credential');
           }
           const data = await response.json();
-          setAvailableCloudClusters(data.clusters || []);
-          if ((data.clusters || []).length > 0) {
-            setSelectedCloudCluster(data.clusters[0]);
+          const fetchedClusters = data.clusters || [];
+          setAvailableCloudClusters(fetchedClusters);
+          if (fetchedClusters.length > 0) {
+            if (selectedCredential.provider === 'azure' && typeof fetchedClusters[0] === 'object') {
+              setSelectedCloudClusterName((fetchedClusters[0] as { name: string }).name);
+            } else if (typeof fetchedClusters[0] === 'string') {
+              setSelectedCloudClusterName(fetchedClusters[0] as string);
+            }
           }
         } catch (error: any) {
           console.error('Error fetching cloud clusters:', error);
@@ -114,35 +159,60 @@ const ClusterConnection: React.FC = () => {
       fetchCloudClusters();
     } else {
       setAvailableCloudClusters([]);
-      setSelectedCloudCluster('');
+      setSelectedCloudClusterName('');
       setCloudClustersError(null);
     }
-  }, [selectedCredential, connectionTab]);
+  }, [selectedCredential, connectionTab, selectedAwsRegions, selectedAzureLocations, setAvailableCloudClusters]);
   
   const handleConnectExisting = () => {
     if (!selectedExistingCluster) return;
     
     addConnectedCluster(selectedExistingCluster);
-    setSelectedExistingCluster(null);
+    router.push('/');
   };
   
   const handleConnectNew = async () => {
-    const clusterToConnect = selectedCloudCluster || typedClusterName;
-    if (!selectedCredential || !clusterToConnect) return;
+    const clusterToConnectName = selectedCloudClusterName || typedClusterName;
+    if (!selectedCredential || !clusterToConnectName) return;
     
     setIsConnecting(true);
     setConnectionError(null);
     
     try {
+      let resourceGroup: string | undefined = undefined;
+      if (selectedCredential.provider === 'azure') {
+        const selectedClusterObj = availableCloudClusters.find(
+          (c): c is { name: string; resourceGroup: string; location: string } => 
+            typeof c === 'object' && c.name === clusterToConnectName
+        );
+        if (selectedClusterObj) {
+          resourceGroup = selectedClusterObj.resourceGroup;
+        } else if (!typedClusterName) {
+          throw new Error(`Could not find details for Azure cluster: ${clusterToConnectName}. Resource group is missing.`);
+        }
+      }
+
+      const connectPayload: any = {
+        provider: selectedCredential.provider,
+        clusterName: clusterToConnectName,
+        credentialName: selectedCredential.profile || selectedCredential.name,
+        subscriptionId: selectedCredential.subscription,
+        projectId: selectedCredential.project,
+        region: selectedCredential.provider === 'aws' && selectedAwsRegions.length > 0 ? selectedAwsRegions[0] :
+                selectedCredential.provider === 'azure' && selectedAzureLocations.length > 0 ? selectedAzureLocations[0] :
+                undefined,
+      };
+
+      if (selectedCredential.provider === 'azure' && resourceGroup) {
+        connectPayload.resourceGroup = resourceGroup;
+      }
+
       const response = await fetch('/api/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          credential: selectedCredential,
-          clusterName: clusterToConnect,
-        }),
+        body: JSON.stringify(connectPayload),
       });
       
       if (!response.ok) {
@@ -158,13 +228,15 @@ const ClusterConnection: React.FC = () => {
       const clusters = await clustersResponse.json();
       setAvailableClusters(clusters);
       
-      const newCluster = clusters.find((c: KubeConfig) => c.name.includes(clusterToConnect));
+      const newCluster = clusters.find((c: KubeConfig) => c.name.includes(clusterToConnectName));
       if (newCluster) {
         addConnectedCluster(newCluster);
       }
       
+      router.push('/');
+      
       setTypedClusterName('');
-      setSelectedCloudCluster('');
+      setSelectedCloudClusterName('');
     } catch (error) {
       console.error('Error connecting to cluster:', error);
       setConnectionError(error instanceof Error ? error.message : 'Failed to connect to cluster');
@@ -306,6 +378,64 @@ const ClusterConnection: React.FC = () => {
                     ))}
                   </div>
                 </div>
+
+                {/* AWS Region Selector */}
+                {selectedCredential?.provider === 'aws' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Select AWS Regions to Scan (defaults to us-east-1, us-west-2 if none selected)
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {AWS_REGIONS.map(region => (
+                        <label key={region.value} className="flex items-center space-x-2 p-2 border rounded-md hover:border-primary cursor-pointer dark:border-gray-600 dark:hover:border-primary-light">
+                          <input 
+                            type="checkbox" 
+                            className="form-checkbox h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-500 dark:checked:bg-primary dark:focus:ring-offset-secondary-dark"
+                            value={region.value}
+                            checked={selectedAwsRegions.includes(region.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAwsRegions(prev => [...prev, region.value]);
+                              } else {
+                                setSelectedAwsRegions(prev => prev.filter(r => r !== region.value));
+                              }
+                            }}
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{region.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Azure Location Selector */}
+                {selectedCredential?.provider === 'azure' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Select Azure Locations to Scan (defaults to all if none selected)
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {AZURE_LOCATIONS.map(location => (
+                        <label key={location.value} className="flex items-center space-x-2 p-2 border rounded-md hover:border-primary cursor-pointer dark:border-gray-600 dark:hover:border-primary-light">
+                          <input 
+                            type="checkbox" 
+                            className="form-checkbox h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-500 dark:checked:bg-primary dark:focus:ring-offset-secondary-dark"
+                            value={location.value}
+                            checked={selectedAzureLocations.includes(location.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAzureLocations(prev => [...prev, location.value]);
+                              } else {
+                                setSelectedAzureLocations(prev => prev.filter(loc => loc !== location.value));
+                              }
+                            }}
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{location.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {selectedCredential && (
                   <div className="mb-4">
@@ -325,15 +455,17 @@ const ClusterConnection: React.FC = () => {
                       <select
                         id="cloudClusterSelect"
                         className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded dark:bg-secondary-dark"
-                        value={selectedCloudCluster}
-                        onChange={(e) => setSelectedCloudCluster(e.target.value)}
+                        value={selectedCloudClusterName}
+                        onChange={(e) => setSelectedCloudClusterName(e.target.value)}
                       >
                         <option value="">-- Select a cluster --</option>
-                        {availableCloudClusters.map(clusterName => (
-                          <option key={clusterName} value={clusterName}>
-                            {clusterName}
-                          </option>
-                        ))}
+                        {availableCloudClusters.map(cluster => {
+                          if (typeof cluster === 'string') {
+                            return <option key={cluster} value={cluster}>{cluster}</option>;
+                          } else {
+                            return <option key={cluster.name} value={cluster.name}>{cluster.name} ({cluster.location})</option>;
+                          }
+                        })}
                       </select>
                     ) : (
                       <div className="text-gray-500 dark:text-gray-400 p-2">
@@ -368,7 +500,7 @@ const ClusterConnection: React.FC = () => {
                 
                 <button
                   className="py-2 px-4 bg-primary text-white rounded hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!selectedCredential || (!selectedCloudCluster && !typedClusterName) || isConnecting || isLoadingCloudClusters}
+                  disabled={!selectedCredential || (!selectedCloudClusterName && !typedClusterName) || isConnecting || isLoadingCloudClusters}
                   onClick={handleConnectNew}
                 >
                   {isConnecting ? (
