@@ -53,14 +53,17 @@ export const useClusterStore = create<ClusterState>((set) => ({
   setAvailableClusters: (clusters) => set({ availableClusters: clusters }),
   
   addConnectedCluster: (cluster) => set((state) => {
-    // Check if already connected
-    if (state.connectedClusters.some(c => c.name === cluster.name)) {
-      return state;
+    // Check if already connected to avoid duplicate objects if logic allows re-adding
+    const alreadyConnected = state.connectedClusters.some(c => c.name === cluster.name);
+    let newConnectedClusters = state.connectedClusters;
+
+    if (!alreadyConnected) {
+      newConnectedClusters = [...state.connectedClusters, cluster];
     }
+    
     return {
-      connectedClusters: [...state.connectedClusters, cluster],
-      // If this is the first cluster, select it
-      selectedCluster: state.selectedCluster === null ? cluster : state.selectedCluster,
+      connectedClusters: newConnectedClusters,
+      selectedCluster: cluster, // Always set the newly added/clicked cluster as selected
     };
   }),
   

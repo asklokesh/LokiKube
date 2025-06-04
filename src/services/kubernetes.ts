@@ -104,7 +104,7 @@ export const loadCloudCredentials = async (): Promise<CloudCredential[]> => {
     const { stdout } = await execAsync('gcloud config list --format=json');
     const gcloudConfig = JSON.parse(stdout);
     
-    if (gcloudConfig.core && gcloudConfig.core.project) {
+    if (gcloudConfig && gcloudConfig.core && gcloudConfig.core.project) {
       credentials.push({
         name: `GCP: ${gcloudConfig.core.project}`,
         provider: 'gcp',
@@ -116,15 +116,19 @@ export const loadCloudCredentials = async (): Promise<CloudCredential[]> => {
     const { stdout: projectsOutput } = await execAsync('gcloud projects list --format=json');
     const projects = JSON.parse(projectsOutput);
     
-    projects.forEach((project: any) => {
-      if (project.projectId !== gcloudConfig.core.project) {
-        credentials.push({
-          name: `GCP: ${project.projectId}`,
-          provider: 'gcp',
-          project: project.projectId,
-        });
-      }
-    });
+    if (Array.isArray(projects)) {
+      projects.forEach((project: any) => {
+        if (project.projectId !== (gcloudConfig?.core?.project)) {
+          credentials.push({
+            name: `GCP: ${project.projectId}`,
+            provider: 'gcp',
+            project: project.projectId,
+          });
+        }
+      });
+    } else {
+      console.warn('GCP projects list did not return an array. Output:', projectsOutput);
+    }
   } catch (error) {
     // GCloud CLI might not be installed or authenticated
     console.error('Error loading GCP credentials:', error);
@@ -135,13 +139,17 @@ export const loadCloudCredentials = async (): Promise<CloudCredential[]> => {
     const { stdout } = await execAsync('az account list --output json');
     const accounts = JSON.parse(stdout);
     
-    accounts.forEach((account: any) => {
-      credentials.push({
-        name: `Azure: ${account.name}`,
-        provider: 'azure',
-        subscription: account.id,
+    if (Array.isArray(accounts)) {
+      accounts.forEach((account: any) => {
+        credentials.push({
+          name: `Azure: ${account.name}`,
+          provider: 'azure',
+          subscription: account.id,
+        });
       });
-    });
+    } else {
+      console.warn('Azure account list did not return an array. Output:', accounts);
+    }
   } catch (error) {
     // Azure CLI might not be installed or authenticated
     console.error('Error loading Azure credentials:', error);
@@ -151,52 +159,109 @@ export const loadCloudCredentials = async (): Promise<CloudCredential[]> => {
 };
 
 // List clusters for a given cloud credential
-export const listClustersForCredential = async (credential: CloudCredential): Promise<string[]> => {
+export const listClustersForCredential = async (
+  credential: CloudCredential, 
+  regionsToScan?: string[], // For AWS
+  locationsToScan?: string[] // For Azure
+): Promise<Array<string | { name: string; resourceGroup: string; location: string }>> => {
   try {
     let command = '';
-    let clusters: string[] = [];
+    let allClusters: Array<string | { name: string; resourceGroup: string; location: string }> = [];
 
     switch (credential.provider) {
       case 'aws':
-        command = `aws eks list-clusters --output json`;
-        if (credential.profile && credential.profile !== 'default') {
-          command += ` --profile ${credential.profile}`;
+        const awsRegionsToTry = (regionsToScan && regionsToScan.length > 0) 
+            ? regionsToScan 
+            : ['us-east-1', 'us-west-2'];
+        
+        console.log(`AWS: Will attempt to list clusters in regions: ${awsRegionsToTry.join(', ')}`);
+        let awsClusterNames: string[] = [];
+        for (const region of awsRegionsToTry) {
+          try {
+            command = `aws eks list-clusters --region ${region} --output json`;
+            if (credential.profile && credential.profile !== 'default') {
+              command += ` --profile ${credential.profile}`;
+            }
+            console.log(`Executing AWS CLI command for region ${region}: ${command}`);
+            const { stdout: awsStdout } = await execAsync(command);
+            const awsResult = JSON.parse(awsStdout);
+            if (awsResult.clusters && awsResult.clusters.length > 0) {
+              awsClusterNames = awsClusterNames.concat(awsResult.clusters);
+            }
+          } catch (regionError: any) {
+            console.warn(`Error listing AWS clusters in region ${region} for profile ${credential.profile || 'default'}: ${regionError.stderr || regionError.message}`);
+          }
         }
-        const { stdout: awsStdout } = await execAsync(command);
-        const awsResult = JSON.parse(awsStdout);
-        clusters = awsResult.clusters || [];
+        allClusters = Array.from(new Set(awsClusterNames)); 
+        if (allClusters.length === 0 && awsRegionsToTry.length > 0) {
+            console.warn(`No AWS EKS clusters found in the specified regions [${awsRegionsToTry.join(', ')}] for profile ${credential.profile || 'default'}`);
+        }
         break;
 
       case 'gcp':
         if (!credential.project) {
-          throw new Error('GCP project ID is required to list clusters.');
+          console.warn('GCP credential selected, but no project ID found.');
+          return [];
         }
-        command = `gcloud container clusters list --project ${credential.project} --format="json(name)"`;
+        command = `gcloud container clusters list --project ${credential.project} --format="value(name)"`;
+        console.log(`Executing GCP CLI command: ${command}`);
         const { stdout: gcpStdout } = await execAsync(command);
-        const gcpResult = JSON.parse(gcpStdout);
-        clusters = gcpResult.map((c: { name: string }) => c.name) || [];
+        const gcpClusterNames = gcpStdout.trim().split('\n').filter(name => name.length > 0);
+        allClusters = gcpClusterNames;
+        if (allClusters.length === 0) {
+            console.warn(`No GCP GKE clusters found in project ${credential.project}`);
+        }
         break;
 
       case 'azure':
         if (!credential.subscription) {
-          throw new Error('Azure subscription ID is required to list clusters.');
+          console.warn('Azure credential selected, but no subscription ID found.');
+          return [];
         }
-        // Ensure the correct subscription is set before listing. This might be redundant if already set.
-        // await execAsync(`az account set --subscription ${credential.subscription}`);
         command = `az aks list --subscription ${credential.subscription} --output json`;
+        console.log(`Executing Azure CLI command: ${command}`);
         const { stdout: azureStdout } = await execAsync(command);
-        const azureResult = JSON.parse(azureStdout);
-        clusters = azureResult.map((c: { name: string }) => c.name) || [];
+        
+        let azureClusterDetails: Array<{ name: string; resourceGroup: string; location: string }> = [];
+        try {
+          const azureResult = JSON.parse(azureStdout);
+          if (Array.isArray(azureResult)) {
+            azureClusterDetails = azureResult.map(cluster => ({ 
+              name: cluster.name,
+              resourceGroup: cluster.resourceGroup,
+              location: cluster.location 
+            }));
+          } else {
+            console.warn('Azure CLI did not return a valid array of clusters. Output:', azureStdout);
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse Azure cluster list JSON. Output:', azureStdout, 'Error:', parseError);
+          // Return empty or throw, depending on desired strictness. For now, returns empty if parse fails.
+        }
+
+        if (locationsToScan && locationsToScan.length > 0) {
+          console.log(`Azure: Filtering clusters by locations: ${locationsToScan.join(', ')}`);
+          azureClusterDetails = azureClusterDetails.filter(cluster => 
+            locationsToScan.includes(cluster.location)
+          );
+          if (azureClusterDetails.length === 0) {
+            console.warn(`No Azure AKS clusters found in the specified locations [${locationsToScan.join(', ')}] for subscription ${credential.subscription}`);
+          }
+        } else {
+          if (azureClusterDetails.length === 0) {
+            console.warn(`No Azure AKS clusters found in subscription ${credential.subscription}`);
+          }
+        }
+        allClusters = azureClusterDetails;
         break;
 
       default:
         throw new Error(`Unsupported provider for listing clusters: ${credential.provider}`);
     }
-    return clusters;
+    return allClusters;
   } catch (error: any) {
     console.error(`Error listing clusters for ${credential.provider} (${credential.name}):`, error.stderr || error.message || error);
-    // Return empty array or rethrow, depending on how we want to handle partial failures in UI
-    throw new Error(`Failed to list clusters for ${credential.provider} (${credential.name}): ${error.stderr || error.message}`);
+    throw new Error(`Failed to list clusters for ${credential.provider} (${credential.name}). Check CLI configuration and permissions. Original error: ${error.stderr || error.message}`);
   }
 };
 
@@ -224,39 +289,62 @@ export const getK8sClient = (contextName: string) => {
 
 // Connect to a specific cloud provider's Kubernetes cluster
 export const connectToCloudCluster = async (
-  credential: CloudCredential,
-  clusterName: string
-): Promise<boolean> => {
+  provider: string, 
+  clusterName: string, 
+  credentialNameOrProfile: string, 
+  accountId?: string, 
+  subscriptionId?: string, 
+  projectId?: string,
+  region?: string,
+  resourceGroup?: string
+): Promise<void> => {
+  let command = '';
+  const env = { ...process.env };
+
   try {
-    switch (credential.provider) {
+    switch (provider.toLowerCase()) {
       case 'aws':
-        if (credential.profile) {
-          await execAsync(
-            `AWS_PROFILE=${credential.profile} aws eks update-kubeconfig --name ${clusterName}`
-          );
-        } else {
-          await execAsync(`aws eks update-kubeconfig --name ${clusterName}`);
+        if (!region) {
+          // Regex to capture standard AWS region formats like us-east-1, eu-west-2, ap-northeast-3
+          const regionMatch = clusterName.match(/(us(-gov)?|ap|ca|cn|eu|sa)-(central|east|north|northeast|northwest|south|southeast|southwest|west)-[0-9]+/);
+          if (regionMatch && regionMatch[0]) {
+            const inferredRegion = regionMatch[0];
+            console.warn(`Region for AWS cluster ${clusterName} was not provided, inferred as ${inferredRegion} from cluster name.`);
+            region = inferredRegion;
+          } else {
+            throw new Error(`Region is required for connecting to AWS EKS cluster ${clusterName} and could not be inferred.`);
+          }
         }
+        env.AWS_PROFILE = credentialNameOrProfile;
+        command = `aws eks update-kubeconfig --name ${clusterName} --region ${region}`;
+        // The AWS_PROFILE environment variable should be sufficient if the profile is configured for role assumption.
+        // No need to explicitly set AWS_ACCESS_KEY_ID etc. here if profile handles it.
+        console.log(`Attempting to connect to AWS cluster: ${clusterName} in region ${region} using profile ${credentialNameOrProfile}`);
         break;
       case 'gcp':
-        if (credential.project) {
+        if (projectId) {
           await execAsync(
-            `gcloud container clusters get-credentials ${clusterName} --project ${credential.project}`
+            `gcloud container clusters get-credentials ${clusterName} --project ${projectId}`
           );
         }
         break;
       case 'azure':
-        if (credential.subscription) {
-          await execAsync(
-            `az account set --subscription ${credential.subscription} && az aks get-credentials --name ${clusterName} --admin`
-          );
+        if (!subscriptionId) {
+          throw new Error('Subscription ID is required for Azure AKS connection.');
         }
+        if (!resourceGroup) { // Check for resourceGroup
+          throw new Error('Resource group is required for Azure AKS connection.');
+        }
+        command = `az account set --subscription ${subscriptionId} && az aks get-credentials --name ${clusterName} --resource-group ${resourceGroup} --admin`;
+        console.log(`Attempting to connect to Azure cluster: ${clusterName} in resource group ${resourceGroup} using subscription ${subscriptionId}`);
+        await execAsync(command); // Execute directly, no need for env here
         break;
+      default:
+        throw new Error(`Unsupported provider for connectToCloudCluster: ${provider}`);
     }
-    return true;
   } catch (error) {
-    console.error(`Error connecting to ${credential.provider} cluster ${clusterName}:`, error);
-    return false;
+    console.error(`Error connecting to ${provider} cluster ${clusterName}:`, error);
+    throw error;
   }
 };
 
@@ -292,6 +380,43 @@ export const listDeployments = async (contextName: string, namespace: string = '
     return response.body.items;
   } catch (error) {
     console.error(`Error listing deployments for context ${contextName} in namespace ${namespace}:`, error);
+    throw error;
+  }
+};
+
+// List services in a namespace
+export const listServices = async (contextName: string, namespace: string = 'default') => {
+  try {
+    const client = getK8sClient(contextName);
+    const response = await client.core.listNamespacedService(namespace);
+    return response.body.items;
+  } catch (error) {
+    console.error(`Error listing services for context ${contextName} in namespace ${namespace}:`, error);
+    throw error;
+  }
+};
+
+// List configmaps in a namespace
+export const listConfigMaps = async (contextName: string, namespace: string = 'default') => {
+  try {
+    const client = getK8sClient(contextName);
+    const response = await client.core.listNamespacedConfigMap(namespace);
+    return response.body.items;
+  } catch (error) {
+    console.error(`Error listing configmaps for context ${contextName} in namespace ${namespace}:`, error);
+    throw error;
+  }
+};
+
+// List secrets in a namespace
+export const listSecrets = async (contextName: string, namespace: string = 'default') => {
+  try {
+    const client = getK8sClient(contextName);
+    // Note: Listing secrets can be sensitive. Ensure appropriate RBAC is in place for the service account/user.
+    const response = await client.core.listNamespacedSecret(namespace);
+    return response.body.items;
+  } catch (error) {
+    console.error(`Error listing secrets for context ${contextName} in namespace ${namespace}:`, error);
     throw error;
   }
 };

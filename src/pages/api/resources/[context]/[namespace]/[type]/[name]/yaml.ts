@@ -1,40 +1,45 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getResourceYaml } from '@/services/kubernetes';
 
+// Helper function (can be moved to a shared utils file if used in multiple API routes)
+const getQueryParam = (param: string | string[] | undefined, paramName: string): string | null => {
+  if (typeof param === 'string' && param) {
+    return param;
+  }
+  return null;
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { context, namespace, type, name } = req.query;
-
-  if (!context || typeof context !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid context parameter' });
-  }
-
-  if (!namespace || typeof namespace !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid namespace parameter' });
-  }
-
-  if (!type || typeof type !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid type parameter' });
-  }
-
-  if (!name || typeof name !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid name parameter' });
-  }
-
   if (req.method === 'GET') {
-    try {
-      // Convert type to singular form (e.g., "pods" -> "pod")
-      const kind = type.endsWith('s') ? type.slice(0, -1) : type;
-      
-      const yaml = await getResourceYaml(context, kind, name, namespace);
-      return res.status(200).json({ yaml });
-    } catch (error) {
-      console.error(`Error fetching YAML for ${type} ${name} in namespace ${namespace}:`, error);
-      return res.status(500).json({ error: 'Failed to fetch resource YAML' });
+    const { context: rawContext, namespace: rawNamespace, type: rawType, name: rawName } = req.query;
+
+    const context = getQueryParam(rawContext, 'context');
+    const namespace = getQueryParam(rawNamespace, 'namespace');
+    const type = getQueryParam(rawType, 'type');
+    const name = getQueryParam(rawName, 'name');
+
+    if (!context || !namespace || !type || !name) {
+      let missing = [];
+      if (!context) missing.push('context');
+      if (!namespace) missing.push('namespace');
+      if (!type) missing.push('type');
+      if (!name) missing.push('name');
+      return res.status(400).json({ error: `Missing or invalid query parameters: ${missing.join(', ')}. All must be non-empty strings.` });
     }
+
+    try {
+      const yamlContent = await getResourceYaml(context, type, name, namespace);
+      res.setHeader('Content-Type', 'application/yaml');
+      return res.status(200).send(yamlContent);
+    } catch (error: any) {
+      console.error(`Error getting YAML for ${type}/${name} in ${namespace} for context ${context}:`, error);
+      return res.status(500).json({ error: error.message || 'Failed to get resource YAML' });
+    }
+  } else {
+    res.setHeader('Allow', ['GET']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
-  
-  return res.status(405).json({ error: 'Method not allowed' });
 } 
