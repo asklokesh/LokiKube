@@ -167,9 +167,15 @@ const ClusterConnection: React.FC = () => {
   }, [selectedCredential, connectionTab, selectedAwsRegions, selectedAzureLocations, setAvailableCloudClusters]);
   
   const handleConnectExisting = () => {
-    if (!selectedExistingCluster) return;
+    console.log('handleConnectExisting called', selectedExistingCluster);
+    if (!selectedExistingCluster) {
+      console.log('No cluster selected');
+      return;
+    }
     
+    console.log('Adding cluster:', selectedExistingCluster);
     addConnectedCluster(selectedExistingCluster);
+    console.log('Redirecting to home page');
     router.push('/');
   };
   
@@ -327,7 +333,9 @@ const ClusterConnection: React.FC = () => {
                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded dark:bg-secondary-dark"
                     value={selectedExistingCluster?.name || ''}
                     onChange={(e) => {
+                      console.log('Select changed:', e.target.value);
                       const selected = availableClusters.find(c => c.name === e.target.value);
+                      console.log('Found cluster:', selected);
                       setSelectedExistingCluster(selected || null);
                     }}
                   >
