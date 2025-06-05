@@ -149,9 +149,11 @@ const ClusterConnection: React.FC = () => {
               setSelectedCloudClusterName(fetchedClusters[0] as string);
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Error fetching cloud clusters:', error);
-          setCloudClustersError(error.message || 'Failed to fetch clusters.');
+          setCloudClustersError(
+            error instanceof Error ? error.message : 'Failed to fetch clusters.'
+          );
         } finally {
           setIsLoadingCloudClusters(false);
         }
@@ -192,7 +194,18 @@ const ClusterConnection: React.FC = () => {
         }
       }
 
-      const connectPayload: any = {
+      // Define proper interface for connect payload
+      interface ConnectPayload {
+        provider: string;
+        clusterName: string;
+        credentialName: string;
+        subscriptionId?: string;
+        projectId?: string;
+        region?: string;
+        resourceGroup?: string;
+      }
+
+      const connectPayload: ConnectPayload = {
         provider: selectedCredential.provider,
         clusterName: clusterToConnectName,
         credentialName: selectedCredential.profile || selectedCredential.name,
@@ -237,7 +250,7 @@ const ClusterConnection: React.FC = () => {
       
       setTypedClusterName('');
       setSelectedCloudClusterName('');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error connecting to cluster:', error);
       setConnectionError(error instanceof Error ? error.message : 'Failed to connect to cluster');
     } finally {

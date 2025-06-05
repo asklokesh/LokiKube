@@ -21,14 +21,14 @@ export default async function handler(
     const type = getQueryParam(rawType, 'type'); // Optional, so null is fine if not provided
 
     if (!context || !namespace) {
-      let missing = [];
+      const missing: string[] = [];
       if (!context) missing.push('context');
       if (!namespace) missing.push('namespace');
       return res.status(400).json({ error: `Missing or invalid query parameters: ${missing.join(', ')}. Context and namespace must be non-empty strings.` });
     }
 
     try {
-      let resources: any[] = [];
+      let resources: unknown[] = [];
       if (type) {
         // If a specific type is requested, fetch only that type
         // (Assuming service functions like listPods, listDeployments handle singular type names)
@@ -60,9 +60,11 @@ export default async function handler(
         resources = [...pods, ...deployments, ...services];
       }
       return res.status(200).json(resources);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error listing resources in ${namespace} for context ${context} (type: ${type || 'all'}):`, error);
-      return res.status(500).json({ error: error.message || 'Failed to list resources' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to list resources' 
+      });
     }
   } else {
     res.setHeader('Allow', ['GET']);
