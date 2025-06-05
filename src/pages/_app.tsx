@@ -2,7 +2,6 @@ import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Head from 'next/head';
-import { useEffect, useState } from 'react';
 
 // Create a react-query client
 const queryClient = new QueryClient({
@@ -15,17 +14,6 @@ const queryClient = new QueryClient({
 });
 
 export default function App({ Component, pageProps }: AppProps) {
-  const [mounted, setMounted] = useState(false);
-
-  // Ensure we only render once hydrated to prevent UI flicker
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
-
   return (
     <>
       <Head>

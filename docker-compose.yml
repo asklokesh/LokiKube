@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  lokikube:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lokikube
+    ports:
+      - "3310:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      # Mount kubeconfig
+      - ${HOME}/.kube:/root/.kube:ro
+      # Mount cloud provider credentials (optional)
+      - ${HOME}/.aws:/root/.aws:ro
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+      - ${HOME}/.azure:/root/.azure:ro
+    restart: unless-stopped
+    networks:
+      - lokikube-network
+
+networks:
+  lokikube-network:
+    driver: bridge
