@@ -1,19 +1,14 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+
+module.exports = {
   reactStrictMode: true,
   swcMinify: true,
-  compiler: {
-    styledComponents: true,
+  
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Client-side specific configurations
+    }
+    return config;
   },
-  // API routes need to be able to access the Kubernetes API
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: '/api/:path*',
-      },
-    ];
-  },
-};
-
-module.exports = nextConfig; 
+  
+}; 

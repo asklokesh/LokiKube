@@ -24,9 +24,11 @@ export default async function handler(
       // The frontend expects an array of objects for Azure, or an array of strings for AWS/GCP.
       // The listClustersForCredential function already returns this mixed type based on provider.
       return res.status(200).json({ clusters });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error in /api/cloud-clusters for ${credential.name}:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to list cloud clusters' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to list cloud clusters' 
+      });
     }
   } else {
     res.setHeader('Allow', ['POST']);

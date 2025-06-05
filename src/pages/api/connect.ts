@@ -46,9 +46,11 @@ export default async function handler(
       } else {
         return res.status(400).json({ error: 'Missing required parameters for connection.' });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error in /api/connect:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to connect to cluster' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to connect to cluster' 
+      });
     }
   } else {
     res.setHeader('Allow', ['POST']);

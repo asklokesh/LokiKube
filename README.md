@@ -84,4 +84,29 @@ MIT
 
 ---
 
-Inspired by [Aptakube](https://github.com/aptakube/aptakube) but built as a web application for maximum compatibility and ease of use. 
+Inspired by [Aptakube](https://github.com/aptakube/aptakube) but built as a web application for maximum compatibility and ease of use.
+
+## Project Structure
+
+- `src/` - Source code
+  - `components/` - React components
+  - `pages/` - Next.js pages and API routes
+  - `services/` - Core services
+    - `kubernetes/` - Kubernetes service modules
+  - `store/` - State management
+  - `styles/` - Global styles
+  - `types/` - TypeScript type definitions
+  - `utils/` - Utility functions
+
+- `config/` - Configuration files
+  - `.eslintrc.js` - ESLint configuration
+  - `babel.config.js` - Babel configuration
+  - `jest.config.js` - Jest configuration
+  - `postcss.config.js` - PostCSS configuration
+  - `tailwind.config.js` - Tailwind CSS configuration
+
+- `scripts/` - Utility scripts
+  - `setup.sh` - Setup script
+  - `run.sh` - Run script
+
+- `tests/` - Test files 

@@ -15,9 +15,11 @@ export default async function handler(
     try {
       const namespaces = await listNamespaces(context);
       return res.status(200).json(namespaces);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error listing namespaces for context ${context}:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to list namespaces' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to list namespaces' 
+      });
     }
   } else {
     res.setHeader('Allow', ['GET']);

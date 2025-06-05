@@ -5,6 +5,26 @@ import Link from 'next/link';
 
 type ResourceType = 'pods' | 'deployments' | 'services' | 'configmaps' | 'secrets';
 
+// Define interface for resource data
+interface K8sResource {
+  metadata: {
+    name: string;
+    uid: string;
+    creationTimestamp?: string;
+    [key: string]: any;
+  };
+  status?: {
+    phase?: string;
+    conditions?: Array<{
+      status: string;
+      type: string;
+      [key: string]: any;
+    }>;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
 const ResourceDashboard: React.FC = () => {
   const { selectedCluster, activeNamespaces } = useClusterStore();
   const [loading, setLoading] = useState(false);
@@ -25,8 +45,17 @@ const ResourceDashboard: React.FC = () => {
           throw new Error('Failed to fetch namespaces');
         }
         
+        // Define interface for namespace data
+        interface NamespaceResource {
+          metadata: {
+            name: string;
+            [key: string]: any;
+          };
+          [key: string]: any;
+        }
+        
         const data = await response.json();
-        setAvailableNamespaces(data.map((ns: any) => ns.metadata.name));
+        setAvailableNamespaces(data.map((ns: NamespaceResource) => ns.metadata.name));
       } catch (error) {
         console.error('Error fetching namespaces:', error);
       }
@@ -189,7 +218,7 @@ const ResourceDashboard: React.FC = () => {
                 </thead>
                 <tbody className="bg-white dark:bg-secondary divide-y divide-gray-200 dark:divide-gray-700">
                   {resources && resources.items && resources.items.length > 0 ? (
-                    resources.items.map((resource: any) => (
+                    resources.items.map((resource: K8sResource) => (
                       <tr key={resource.metadata.uid} className="hover:bg-gray-50 dark:hover:bg-secondary-light">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-medium text-gray-900 dark:text-gray-100">
@@ -201,13 +230,13 @@ const ResourceDashboard: React.FC = () => {
                             <div className={`w-2 h-2 rounded-full mr-2 ${
                               getStatusColor(
                                 selectedResourceType === 'pods' 
-                                  ? resource.status.phase 
+                                  ? resource.status?.phase || 'Unknown'
                                   : resource.status?.conditions?.[0]?.status || 'Unknown'
                               )
                             }`} />
                             <span>
                               {selectedResourceType === 'pods' 
-                                ? resource.status.phase 
+                                ? resource.status?.phase || 'Unknown'
                                 : resource.status?.conditions?.[0]?.status || 'Unknown'}
                             </span>
                           </div>

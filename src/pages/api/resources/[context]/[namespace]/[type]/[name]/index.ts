@@ -22,7 +22,7 @@ export default async function handler(
   const name = getQueryParam(rawName, 'name');
 
   if (!context || !namespace || !type || !name) {
-    let missing = [];
+    const missing: string[] = [];
     if (!context) missing.push('context');
     if (!namespace) missing.push('namespace');
     if (!type) missing.push('type');
@@ -40,17 +40,21 @@ export default async function handler(
       // To return as YAML text:
       res.setHeader('Content-Type', 'application/yaml');
       return res.status(200).send(resource);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error getting resource ${type}/${name} in ${namespace} for context ${context}:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to get resource' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to get resource' 
+      });
     }
   } else if (req.method === 'DELETE') {
     try {
       await deleteResource(context, type, name, namespace);
       return res.status(204).end(); // Successfully deleted, no content to return
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error deleting resource ${type}/${name} in ${namespace} for context ${context}:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to delete resource' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to delete resource'
+      });
     }
   } else {
     res.setHeader('Allow', ['GET', 'DELETE']);

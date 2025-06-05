@@ -22,7 +22,7 @@ export default async function handler(
     const name = getQueryParam(rawName, 'name');
 
     if (!context || !namespace || !type || !name) {
-      let missing = [];
+      const missing: string[] = [];
       if (!context) missing.push('context');
       if (!namespace) missing.push('namespace');
       if (!type) missing.push('type');
@@ -34,9 +34,11 @@ export default async function handler(
       const yamlContent = await getResourceYaml(context, type, name, namespace);
       res.setHeader('Content-Type', 'application/yaml');
       return res.status(200).send(yamlContent);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error getting YAML for ${type}/${name} in ${namespace} for context ${context}:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to get resource YAML' });
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to get resource YAML' 
+      });
     }
   } else {
     res.setHeader('Allow', ['GET']);
