@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { KubeConfig, CloudCredential } from '@/services/kubernetes';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { KubeConfig, CloudCredential, Alert, ClusterConfig, AlertRule } from '@/services/kubernetes';
 
 interface ClusterState {
   // All available clusters from kubeconfig
@@ -8,6 +9,8 @@ interface ClusterState {
   connectedClusters: KubeConfig[];
   // Currently selected cluster
   selectedCluster: KubeConfig | null;
+  // Selected clusters for multi-cluster view
+  selectedClusters: KubeConfig[];
   // Available cloud credentials
   cloudCredentials: CloudCredential[];
   // Loading states
@@ -20,11 +23,26 @@ interface ClusterState {
   connectionError: string | null;
   // Active namespaces for each cluster
   activeNamespaces: Record<string, string[]>;
+  // Alerts
+  alerts: Alert[];
+  // Alert rules
+  alertRules: AlertRule[];
+  // Cluster configurations
+  clusterConfigs: ClusterConfig[];
+  // Active configuration
+  activeConfig: ClusterConfig | null;
+  // Theme settings
+  theme: 'light' | 'dark' | 'system';
+  primaryColor: string;
+  // View settings
+  viewMode: 'single' | 'multi' | 'comparison';
+  refreshInterval: number;
   // Actions
   setAvailableClusters: (clusters: KubeConfig[]) => void;
   addConnectedCluster: (cluster: KubeConfig) => void;
   removeConnectedCluster: (clusterName: string) => void;
   setSelectedCluster: (cluster: KubeConfig | null) => void;
+  toggleSelectedCluster: (cluster: KubeConfig) => void;
   setCloudCredentials: (credentials: CloudCredential[]) => void;
   setIsLoadingClusters: (isLoading: boolean) => void;
   setIsLoadingCredentials: (isLoading: boolean) => void;
@@ -35,20 +53,51 @@ interface ClusterState {
   setActiveNamespaces: (clusterName: string, namespaces: string[]) => void;
   addActiveNamespace: (clusterName: string, namespace: string) => void;
   removeActiveNamespace: (clusterName: string, namespace: string) => void;
+  // Alert actions
+  addAlert: (alert: Alert) => void;
+  removeAlert: (alertId: string) => void;
+  acknowledgeAlert: (alertId: string) => void;
+  clearAlerts: () => void;
+  // Alert rule actions
+  addAlertRule: (rule: AlertRule) => void;
+  updateAlertRule: (ruleId: string, rule: Partial<AlertRule>) => void;
+  removeAlertRule: (ruleId: string) => void;
+  // Config actions
+  addClusterConfig: (config: ClusterConfig) => void;
+  updateClusterConfig: (configId: string, config: Partial<ClusterConfig>) => void;
+  removeClusterConfig: (configId: string) => void;
+  setActiveConfig: (config: ClusterConfig | null) => void;
+  // Theme actions
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setPrimaryColor: (color: string) => void;
+  // View actions
+  setViewMode: (mode: 'single' | 'multi' | 'comparison') => void;
+  setRefreshInterval: (interval: number) => void;
 }
 
-export const useClusterStore = create<ClusterState>((set) => ({
-  availableClusters: [],
-  connectedClusters: [],
-  selectedCluster: null,
-  cloudCredentials: [],
-  isLoadingClusters: false,
-  isLoadingCredentials: false,
-  isConnecting: false,
-  clusterError: null,
-  credentialError: null,
-  connectionError: null,
-  activeNamespaces: {},
+export const useClusterStore = create<ClusterState>()(
+  persist(
+    (set) => ({
+      availableClusters: [],
+      connectedClusters: [],
+      selectedCluster: null,
+      selectedClusters: [],
+      cloudCredentials: [],
+      isLoadingClusters: false,
+      isLoadingCredentials: false,
+      isConnecting: false,
+      clusterError: null,
+      credentialError: null,
+      connectionError: null,
+      activeNamespaces: {},
+      alerts: [],
+      alertRules: [],
+      clusterConfigs: [],
+      activeConfig: null,
+      theme: 'system',
+      primaryColor: '#3B82F6',
+      viewMode: 'single',
+      refreshInterval: 30000,
   
   setAvailableClusters: (clusters) => set({ availableClusters: clusters }),
   
@@ -127,4 +176,90 @@ export const useClusterStore = create<ClusterState>((set) => ({
       },
     };
   }),
-})); 
+
+  toggleSelectedCluster: (cluster) => set((state) => {
+    const isSelected = state.selectedClusters.some(c => c.name === cluster.name);
+    if (isSelected) {
+      return {
+        selectedClusters: state.selectedClusters.filter(c => c.name !== cluster.name),
+      };
+    } else {
+      return {
+        selectedClusters: [...state.selectedClusters, cluster],
+      };
+    }
+  }),
+
+  // Alert actions
+  addAlert: (alert) => set((state) => ({
+    alerts: [...state.alerts, alert],
+  })),
+
+  removeAlert: (alertId) => set((state) => ({
+    alerts: state.alerts.filter(a => a.id !== alertId),
+  })),
+
+  acknowledgeAlert: (alertId) => set((state) => ({
+    alerts: state.alerts.map(a => 
+      a.id === alertId ? { ...a, acknowledged: true } : a
+    ),
+  })),
+
+  clearAlerts: () => set({ alerts: [] }),
+
+  // Alert rule actions
+  addAlertRule: (rule) => set((state) => ({
+    alertRules: [...state.alertRules, rule],
+  })),
+
+  updateAlertRule: (ruleId, rule) => set((state) => ({
+    alertRules: state.alertRules.map(r => 
+      r.id === ruleId ? { ...r, ...rule } : r
+    ),
+  })),
+
+  removeAlertRule: (ruleId) => set((state) => ({
+    alertRules: state.alertRules.filter(r => r.id !== ruleId),
+  })),
+
+  // Config actions
+  addClusterConfig: (config) => set((state) => ({
+    clusterConfigs: [...state.clusterConfigs, config],
+  })),
+
+  updateClusterConfig: (configId, config) => set((state) => ({
+    clusterConfigs: state.clusterConfigs.map(c => 
+      c.id === configId ? { ...c, ...config } : c
+    ),
+  })),
+
+  removeClusterConfig: (configId) => set((state) => ({
+    clusterConfigs: state.clusterConfigs.filter(c => c.id !== configId),
+  })),
+
+  setActiveConfig: (config) => set({ activeConfig: config }),
+
+  // Theme actions
+  setTheme: (theme) => set({ theme }),
+  setPrimaryColor: (color) => set({ primaryColor: color }),
+
+  // View actions
+  setViewMode: (mode) => set({ viewMode: mode }),
+  setRefreshInterval: (interval) => set({ refreshInterval: interval }),
+}),
+{
+  name: 'lokikube-storage',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    connectedClusters: state.connectedClusters,
+    activeNamespaces: state.activeNamespaces,
+    alertRules: state.alertRules,
+    clusterConfigs: state.clusterConfigs,
+    activeConfig: state.activeConfig,
+    theme: state.theme,
+    primaryColor: state.primaryColor,
+    viewMode: state.viewMode,
+    refreshInterval: state.refreshInterval,
+  }),
+}
+)); 
