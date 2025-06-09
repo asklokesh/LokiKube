@@ -1,5 +1,24 @@
 # LokiKube
 
+<div align="center">
+
+# Lokikube
+
+[![GitHub stars](https://img.shields.io/github/stars/asklokesh/LokiKube?style=social)](https://github.com/asklokesh/LokiKube/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/asklokesh/LokiKube?style=social)](https://github.com/asklokesh/LokiKube/network)
+[![GitHub watchers](https://img.shields.io/github/watchers/asklokesh/LokiKube?style=social)](https://github.com/asklokesh/LokiKube/watchers)
+
+[![License](https://img.shields.io/github/license/asklokesh/LokiKube?style=for-the-badge)](https://github.com/asklokesh/LokiKube/blob/main/LICENSE)
+[![Issues](https://img.shields.io/github/issues/asklokesh/LokiKube?style=for-the-badge)](https://github.com/asklokesh/LokiKube/issues)
+[![Pull Requests](https://img.shields.io/github/issues-pr/asklokesh/LokiKube?style=for-the-badge)](https://github.com/asklokesh/LokiKube/pulls)
+[![Last Commit](https://img.shields.io/github/last-commit/asklokesh/LokiKube?style=for-the-badge)](https://github.com/asklokesh/LokiKube/commits)
+
+[![Commit Activity](https://img.shields.io/github/commit-activity/m/asklokesh/LokiKube?style=flat-square)](https://github.com/asklokesh/LokiKube/pulse)
+[![Code Size](https://img.shields.io/github/languages/code-size/asklokesh/LokiKube?style=flat-square)](https://github.com/asklokesh/LokiKube)
+[![Contributors](https://img.shields.io/github/contributors/asklokesh/LokiKube?style=flat-square)](https://github.com/asklokesh/LokiKube/graphs/contributors)
+
+</div>
+
 A modern web-based Kubernetes cluster management tool with multi-cloud support.
 
 ## Features
