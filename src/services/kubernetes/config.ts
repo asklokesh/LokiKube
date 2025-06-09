@@ -17,6 +17,13 @@ export const getKubeConfigPath = (): string => {
   return path.join(os.homedir(), '.kube', 'config');
 };
 
+// Get K8s configuration
+export const getKubeConfig = (): k8s.KubeConfig => {
+  const config = new k8s.KubeConfig();
+  config.loadFromFile(getKubeConfigPath());
+  return config;
+};
+
 // Load K8s configurations
 export const loadKubeConfigs = async (): Promise<KubeConfig[]> => {
   try {
