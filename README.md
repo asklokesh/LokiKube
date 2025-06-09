@@ -27,7 +27,7 @@ docker-compose up -d
 docker-compose down
 ```
 
-Access the application at http://localhost:3310
+Access the application at http://localhost:34550
 
 ### Manual Installation
 
@@ -40,10 +40,10 @@ Requirements:
 # Install dependencies
 npm install
 
-# Run in development mode
+# Run in development mode (port 34550)
 npm run dev
 
-# Build and run in production
+# Build and run in production (port 34550)
 npm run build
 npm start
 ```
