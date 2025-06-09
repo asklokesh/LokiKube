@@ -1,13 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getResourceYaml } from '@/services/kubernetes';
-
-// Helper function (can be moved to a shared utils file if used in multiple API routes)
-const getQueryParam = (param: string | string[] | undefined, paramName: string): string | null => {
-  if (typeof param === 'string' && param) {
-    return param;
-  }
-  return null;
-};
+import { getQueryParam } from '@/utils/api-helpers';
 
 export default async function handler(
   req: NextApiRequest,
@@ -16,10 +9,10 @@ export default async function handler(
   if (req.method === 'GET') {
     const { context: rawContext, namespace: rawNamespace, type: rawType, name: rawName } = req.query;
 
-    const context = getQueryParam(rawContext, 'context');
-    const namespace = getQueryParam(rawNamespace, 'namespace');
-    const type = getQueryParam(rawType, 'type');
-    const name = getQueryParam(rawName, 'name');
+    const context = getQueryParam(rawContext);
+    const namespace = getQueryParam(rawNamespace);
+    const type = getQueryParam(rawType);
+    const name = getQueryParam(rawName);
 
     if (!context || !namespace || !type || !name) {
       const missing: string[] = [];

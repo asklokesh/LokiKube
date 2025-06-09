@@ -8,7 +8,9 @@ export const listNamespaces = async (contextName: string) => {
   try {
     const client = getK8sClient(contextName);
     const res = await client.core.listNamespace();
-    return res.body.items.map(item => item.metadata?.name).filter(Boolean);
+    return res.body.items
+      .map(item => item.metadata?.name)
+      .filter((name): name is string => Boolean(name));
   } catch (error) {
     console.error('Error listing namespaces:', error);
     throw error;
@@ -90,7 +92,12 @@ export const getPodLogs = async (
     const res = await client.core.readNamespacedPod(podName, namespace);
     
     // If container name is not specified, use the first container
-    const container = containerName || res.body.spec?.containers?.[0]?.name;
+    const containers = res.body.spec?.containers;
+    if (!containers || containers.length === 0) {
+      throw new Error('No containers found in pod');
+    }
+    
+    const container = containerName || containers[0].name;
     
     if (!container) {
       throw new Error('No container found in pod');
@@ -211,14 +218,29 @@ export const applyYaml = async (contextName: string, yamlContent: string) => {
     const results = [];
     
     for (const resource of resources) {
-      // Skip invalid resources
-      if (!resource || !resource.apiVersion || !resource.kind || !resource.metadata || !resource.metadata.name) {
+      // Skip null/empty resources
+      if (!resource) {
         continue;
+      }
+      
+      // Validate required fields
+      if (!resource.apiVersion || !resource.kind) {
+        throw new Error(`Invalid resource: missing apiVersion or kind`);
+      }
+      
+      if (!resource.metadata || !resource.metadata.name) {
+        throw new Error(`Invalid resource ${resource.kind}: missing metadata.name`);
+      }
+      
+      // Validate that the resource type is not potentially dangerous
+      const dangerousKinds = ['ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition'];
+      if (dangerousKinds.includes(resource.kind) && !resource.metadata.namespace) {
+        throw new Error(`Applying cluster-wide ${resource.kind} resources requires additional validation`);
       }
       
       try {
         // Use minimal metadata for read
-        const metadata = {
+        const metadata: any = {
           name: resource.metadata.name,
         };
         

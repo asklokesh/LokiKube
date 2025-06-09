@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { CloudCredential } from './types';
 import { getKubeConfigPath } from './config';
+import { escapeShellArg, validateSafeString, PATTERNS } from '@/utils/shell-escape';
 
 const execAsync = promisify(exec);
 
@@ -26,8 +27,13 @@ export const listClustersForCredential = async (
         // For AWS, we need to check each region
         for (const region of regions) {
           try {
+            if (!credential.profile) {
+              throw new Error('AWS profile is required for AWS provider');
+            }
+            const validProfile = validateSafeString(credential.profile, PATTERNS.AWS_PROFILE, 'AWS profile');
+            const validRegion = validateSafeString(region, PATTERNS.AWS_REGION, 'AWS region');
             const { stdout } = await execAsync(
-              `AWS_PROFILE=${credential.profile} aws eks list-clusters --region ${region} --output json`
+              `AWS_PROFILE=${validProfile} aws eks list-clusters --region ${validRegion} --output json`
             );
             const result = JSON.parse(stdout);
             
@@ -48,8 +54,12 @@ export const listClustersForCredential = async (
       }
       
       case 'gcp': {
+        if (!credential.project) {
+          throw new Error('Project ID is required for GCP provider');
+        }
+        const validProject = validateSafeString(credential.project, PATTERNS.GCP_PROJECT, 'GCP project');
         const { stdout } = await execAsync(
-          `gcloud container clusters list --project=${credential.project} --format=json`
+          `gcloud container clusters list --project=${validProject} --format=json`
         );
         const clusters = JSON.parse(stdout);
         
@@ -68,8 +78,12 @@ export const listClustersForCredential = async (
         
         if (locations.includes('all')) {
           // If 'all' is specified, get all clusters
+          if (!credential.subscription) {
+            throw new Error('Subscription ID is required for Azure provider');
+          }
+          const validSubscription = validateSafeString(credential.subscription, PATTERNS.AZURE_SUBSCRIPTION, 'Azure subscription');
           const { stdout } = await execAsync(
-            `az aks list --subscription ${credential.subscription} --output json`
+            `az aks list --subscription ${validSubscription} --output json`
           );
           const clusters = JSON.parse(stdout);
           
@@ -86,8 +100,13 @@ export const listClustersForCredential = async (
           // Otherwise, check each location
           for (const location of locations) {
             try {
+              if (!credential.subscription) {
+            throw new Error('Subscription ID is required for Azure provider');
+          }
+          const validSubscription = validateSafeString(credential.subscription, PATTERNS.AZURE_SUBSCRIPTION, 'Azure subscription');
+              const validLocation = validateSafeString(location, PATTERNS.AZURE_LOCATION, 'Azure location');
               const { stdout } = await execAsync(
-                `az aks list --subscription ${credential.subscription} --location ${location} --output json`
+                `az aks list --subscription ${validSubscription} --location ${validLocation} --output json`
               );
               const clusters = JSON.parse(stdout);
               
@@ -141,8 +160,11 @@ export const connectToCloudCluster = async (
           throw new Error('Region is required for AWS EKS clusters');
         }
         
+        const validProfile = validateSafeString(credentialNameOrProfile, PATTERNS.AWS_PROFILE, 'AWS profile');
+        const validCluster = validateSafeString(cluster, PATTERNS.CLUSTER_NAME, 'cluster name');
+        const validRegion = validateSafeString(clusterRegion, PATTERNS.AWS_REGION, 'AWS region');
         await execAsync(
-          `AWS_PROFILE=${credentialNameOrProfile} aws eks update-kubeconfig --name ${cluster} --region ${clusterRegion} --kubeconfig ${getKubeConfigPath()}`
+          `AWS_PROFILE=${validProfile} aws eks update-kubeconfig --name ${validCluster} --region ${validRegion} --kubeconfig ${escapeShellArg(getKubeConfigPath())}`
         );
         break;
       }
@@ -152,8 +174,10 @@ export const connectToCloudCluster = async (
           throw new Error('Project ID is required for GCP GKE clusters');
         }
         
+        const validCluster = validateSafeString(clusterName, PATTERNS.CLUSTER_NAME, 'cluster name');
+        const validProject = validateSafeString(projectId, PATTERNS.GCP_PROJECT, 'GCP project');
         await execAsync(
-          `gcloud container clusters get-credentials ${clusterName} --project ${projectId} --kubeconfig ${getKubeConfigPath()}`
+          `gcloud container clusters get-credentials ${validCluster} --project ${validProject} --kubeconfig ${escapeShellArg(getKubeConfigPath())}`
         );
         break;
       }
@@ -167,8 +191,11 @@ export const connectToCloudCluster = async (
           throw new Error('Subscription ID is required for Azure AKS clusters');
         }
         
+        const validCluster = validateSafeString(clusterName, PATTERNS.CLUSTER_NAME, 'cluster name');
+        const validResourceGroup = validateSafeString(resourceGroup, PATTERNS.AZURE_RESOURCE_GROUP, 'resource group');
+        const validSubscription = validateSafeString(subscriptionId, PATTERNS.AZURE_SUBSCRIPTION, 'Azure subscription');
         await execAsync(
-          `az aks get-credentials --name ${clusterName} --resource-group ${resourceGroup} --subscription ${subscriptionId} --file ${getKubeConfigPath()} --overwrite-existing`
+          `az aks get-credentials --name ${validCluster} --resource-group ${validResourceGroup} --subscription ${validSubscription} --file ${escapeShellArg(getKubeConfigPath())} --overwrite-existing`
         );
         break;
       }
