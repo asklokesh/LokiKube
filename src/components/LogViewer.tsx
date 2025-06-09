@@ -21,7 +21,7 @@ const LogViewer: React.FC<LogViewerProps> = ({ context, namespace, podName, cont
     try {
       let url = `/api/logs/${context}/${namespace}/${podName}`;
       if (containerName) {
-        url += `?containerName=${containerName}`;
+        url += `?container=${containerName}`;
       }
       
       const response = await fetch(url);
@@ -29,8 +29,8 @@ const LogViewer: React.FC<LogViewerProps> = ({ context, namespace, podName, cont
         throw new Error('Failed to fetch logs');
       }
       
-      const data = await response.json();
-      setLogs(data.logs);
+      const logs = await response.text();
+      setLogs(logs);
       setError(null);
     } catch (error) {
       console.error('Error fetching logs:', error);
