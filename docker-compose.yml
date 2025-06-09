@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: lokikube
     ports:
-      - "3310:3000"
+      - "34550:34550"
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1

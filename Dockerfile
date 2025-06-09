@@ -36,7 +36,7 @@ COPY --from=builder /app/node_modules ./node_modules
 RUN mkdir -p /root/.kube /root/.aws /root/.config/gcloud /root/.azure
 
 # Expose port
-EXPOSE 3000
+EXPOSE 34550
 
 # Environment variables
 ENV NODE_ENV=production
