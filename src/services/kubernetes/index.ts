@@ -7,7 +7,8 @@ export {
   loadKubeConfigs,
   loadCloudCredentials,
   getKubeConfigForContext,
-  getK8sClient
+  getK8sClient,
+  getKubeConfig
 } from './config';
 
 // Export cloud functions

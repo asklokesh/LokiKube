@@ -15,6 +15,25 @@
   --color-error: #e74c3c;
 }
 
+[data-theme="dark"] {
+  --color-primary: #5dade2;
+  --color-primary-dark: #3498db;
+  --color-primary-light: #85c1e9;
+}
+
+/* Dynamic theme colors */
+.theme-primary {
+  color: var(--color-primary);
+}
+
+.bg-theme-primary {
+  background-color: var(--color-primary);
+}
+
+.border-theme-primary {
+  border-color: var(--color-primary);
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
