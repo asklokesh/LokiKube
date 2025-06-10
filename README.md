@@ -21,47 +21,47 @@
 
 ## Key Features
 
-### 🚀 Multi-Cluster Management
+### Multi-Cluster Management
 - **Unified Dashboard**: Manage multiple Kubernetes clusters from a single interface
 - **Comparison Views**: Side-by-side cluster comparison for metrics, health, and alerts
 - **Health Monitoring**: Real-time cluster health checks with status indicators
 - **Auto-Discovery**: Automatically detect cloud-managed clusters (EKS, AKS, GKE)
 
-### ☁️ Multi-Cloud Support
+### Multi-Cloud Support
 - **AWS EKS**: Profile-based authentication with region selection
 - **Azure AKS**: Subscription and tenant ID support with resource group tracking
 - **Google GKE**: Project ID support with service account authentication
 - **Credential Management**: Secure storage and management of cloud credentials
 
-### 📊 Advanced Monitoring & Alerting
+### Advanced Monitoring & Alerting
 - **Custom Alert Rules**: Create alerts based on CPU, memory, restarts, or custom metrics
 - **Multi-Channel Notifications**: Webhooks, email, Slack integration
 - **Alert Management**: Acknowledgment system with severity levels (critical/warning/info)
 - **Real-time Metrics**: Live CPU, memory usage tracking with visual indicators
 - **Duration-Based Alerts**: Trigger alerts only after conditions persist
 
-### 🔧 Resource Management
+### Resource Management
 - **Comprehensive Coverage**: Pods, Deployments, Services, ConfigMaps, Secrets
 - **Advanced Filtering**: Filter by namespace, labels, and annotations
 - **YAML Editor**: Syntax-highlighted editor with validation
 - **Batch Operations**: Perform actions on multiple resources
 - **Resource Health**: Visual status indicators and age tracking
 
-### 📋 Log Management
+### Log Management
 - **Real-time Streaming**: Live log updates with auto-refresh
 - **Container Selection**: View logs from specific containers in multi-container pods
 - **Log Filtering**: Search and filter logs in real-time
 - **Export Capabilities**: Download logs as text files
 - **Playback Controls**: Pause, resume, and clear log streams
 
-### 🎨 User Experience
+### User Experience
 - **Dark Mode**: Full theme support (light/dark/system)
 - **Customizable UI**: Configurable primary colors and layouts
 - **Responsive Design**: Mobile-friendly interface
 - **Persistent State**: Settings and connections saved locally
 - **Multiple View Modes**: Single, multi, and comparison cluster views
 
-### 🔒 Security Features
+### Security Features
 - **Credential Isolation**: Uses existing kubeconfig without storing credentials
 - **Profile Management**: Support for multiple authentication profiles
 - **Secure API**: RESTful endpoints with proper authentication
@@ -257,9 +257,9 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## Support
 
-- 📋 [Report Issues](https://github.com/asklokesh/LokiKube/issues)
-- 💬 [Discussions](https://github.com/asklokesh/LokiKube/discussions)
-- 📧 Contact: [asklokesh](https://github.com/asklokesh)
+- [Report Issues](https://github.com/asklokesh/LokiKube/issues)
+- [Discussions](https://github.com/asklokesh/LokiKube/discussions)
+- Contact: [asklokesh](https://github.com/asklokesh)
 
 ## Roadmap
 
@@ -278,5 +278,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-Made with ❤️ by the LokiKube community
+Made with love by the LokiKube community
 </div>
